@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#2E5D4E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="健身记录">
+<link rel="manifest" href="manifest.json">
+<title>健身记录</title>
+<style>
+  /* ================================================================
+   * 极简主题：墨绿主色、清爽无广告感
+   * 设计取舍：低饱和墨绿传递健康感但不刺眼，圆角统一12，平面无阴影
+   * ================================================================ */
+  :root {
+    --primary: #2E5D4E;
+    --primary-light: #3A7260;
+    --bg: #F7F8F5;
+    --card: #FFFFFF;
+    --text: #1A1A1A;
+    --text2: #4A4A4A;
+    --text3: #999;
+    --danger: #E5533C;
+    --radius: 12px;
+    --input-bg: #F2F3EE;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100vh;
+    padding-bottom: 72px;
+    -webkit-user-select: none; user-select: none;
+  }
+  input, textarea { -webkit-user-select: text; user-select: text; }
+
+  /* ===== 顶部标题栏 + 日期导航 ===== */
+  header {
+    background: var(--card);
+    padding: 14px 16px;
+    border-bottom: 1px solid #EEE;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky; top: 0; z-index: 50;
+  }
+  header .title { font-size: 18px; font-weight: 600; }
+  header .date-nav { display: flex; align-items: center; gap: 8px; }
+  header .date-nav button {
+    background: none; border: none; font-size: 20px;
+    color: var(--text3); cursor: pointer; padding: 4px 8px; border-radius: 8px;
+  }
+  header .date-nav button:active { background: var(--input-bg); }
+  header .date-label { font-size: 14px; color: var(--text2); min-width: 72px; text-align: center; }
+  header .date-label.today { color: var(--primary); font-weight: 600; }
+
+  /* ===== 统计卡片 ===== */
+  .stats { display: flex; gap: 10px; padding: 12px 16px 0; }
+  .stat-card {
+    flex: 1; background: var(--card); border-radius: var(--radius); padding: 14px 16px;
+  }
+  .stat-card .label { font-size: 12px; color: var(--text3); }
+  .stat-card .value { font-size: 26px; font-weight: 700; margin-top: 4px; }
+  .stat-card .unit { font-size: 12px; color: var(--text3); margin-left: 3px; }
+  .stat-card.burn .value { color: var(--primary); }
+  .stat-card.net .value { font-size: 22px; }
+  .stat-card.net .value.pos { color: var(--danger); }
+  .stat-card.net .value.neg { color: var(--primary); }
+
+  /* ===== 分区 ===== */
+  .section { padding: 18px 16px 0; }
+  .section h2 { font-size: 15px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
+
+  /* ===== 记录列表项 ===== */
+  .list-item {
+    background: var(--card); border-radius: var(--radius);
+    padding: 13px 16px; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 10px;
+    transition: transform 0.15s;
+  }
+  .list-item:active { transform: scale(0.98); }
+  .list-item .info { flex: 1; min-width: 0; }
+  .list-item .title { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list-item .sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
+  .list-item .cal { font-weight: 600; color: var(--text2); font-size: 15px; white-space: nowrap; }
+  .list-item.burn .cal { color: var(--primary); }
+  .list-item .del {
+    background: none; border: none; color: var(--text3);
+    cursor: pointer; font-size: 18px; padding: 4px 6px; border-radius: 6px;
+  }
+  .list-item .del:active { color: var(--danger); background: #FEE; }
+
+  /* ===== 空状态 ===== */
+  .empty { text-align: center; padding: 28px; color: var(--text3); }
+  .empty .icon { font-size: 36px; opacity: 0.35; }
+  .empty .text { font-size: 14px; margin-top: 6px; }
+
+  /* ===== 添加按钮（FAB） ===== */
+  .fab {
+    position: fixed; bottom: 84px; right: 50%; transform: translateX(240px);
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--primary); color: #FFF; border: none;
+    font-size: 28px; cursor: pointer; box-shadow: 0 4px 14px rgba(46,93,78,0.35);
+    z-index: 100; transition: transform 0.15s;
+  }
+  .fab:active { transform: translateX(240px) scale(0.92); }
+
+  /* ===== 底部导航 ===== */
+  nav {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 100%; max-width: 480px;
+    background: var(--card); border-top: 1px solid #EEE;
+    display: flex; z-index: 100;
+  }
+  nav button {
+    flex: 1; background: none; border: none; padding: 10px;
+    font-size: 12px; color: var(--text3); cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+  nav button.active { color: var(--primary); font-weight: 600; }
+  nav button .ic { font-size: 20px; }
+
+  /* ===== 弹窗 ===== */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+    display: none; justify-content: center; align-items: flex-end; z-index: 200;
+    transition: opacity 0.2s;
+  }
+  .overlay.show { display: flex; }
+  .dialog {
+    background: var(--card); border-radius: var(--radius) var(--radius) 0 0;
+    padding: 20px; width: 100%; max-width: 480px;
+    animation: slideUp 0.2s ease-out;
+  }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .dialog h3 { font-size: 17px; margin-bottom: 14px; text-align: center; }
+  .dialog input {
+    width: 100%; padding: 12px 14px; border: none;
+    background: var(--input-bg); border-radius: 10px; font-size: 15px;
+    margin-bottom: 10px; outline: none;
+  }
+  .dialog input:focus { box-shadow: 0 0 0 1.5px var(--primary); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .chip {
+    background: var(--input-bg); border: none; border-radius: 16px;
+    padding: 7px 14px; font-size: 13px; cursor: pointer; color: var(--text2);
+    transition: background 0.15s;
+  }
+  .chip:active { background: #E0E3D8; }
+  .chip.active { background: var(--primary); color: #FFF; }
+  .dialog .btns { display: flex; gap: 10px; margin-top: 6px; }
+  .dialog .btns button {
+    flex: 1; padding: 12px; border: none; border-radius: 10px;
+    font-size: 15px; font-weight: 600; cursor: pointer;
+  }
+  .btn-cancel { background: var(--input-bg); color: var(--text2); }
+  .btn-save { background: var(--primary); color: #FFF; }
+  .btn-danger { background: var(--danger); color: #FFF; }
+  .menu-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px; border-radius: 10px; cursor: pointer;
+    font-size: 15px; color: var(--text);
+  }
+  .menu-item:active { background: var(--input-bg); }
+  .menu-item .mi-icon { font-size: 20px; }
+
+  /* ===== 周统计柱状图 ===== */
+  .chart { display: flex; align-items: flex-end; gap: 5px; height: 180px; margin-top: 10px; }
+  .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+  .bar {
+    width: 80%; background: var(--primary); border-radius: 4px;
+    min-height: 2px; transition: height 0.3s; position: relative;
+  }
+  .bar.today { background: var(--primary-light); }
+  .bar-val { font-size: 9px; color: var(--text3); margin-bottom: 2px; }
+  .bar-label { font-size: 11px; color: var(--text3); margin-top: 5px; }
+  .bar-label.today { color: var(--primary); font-weight: 600; }
+  .summary-row {
+    display: flex; justify-content: space-between;
+    padding: 7px 0; font-size: 14px; color: var(--text2);
+  }
+  .summary-row .v { font-weight: 600; color: var(--text); }
+
+  /* ===== Toast ===== */
+  .toast {
+    position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+    background: #333; color: #FFF; padding: 10px 20px;
+    border-radius: 8px; font-size: 14px; z-index: 300;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+
+  /* ===== 导出导入按钮 ===== */
+  .data-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .data-actions button {
+    flex: 1; padding: 12px; border: none; border-radius: 10px;
+    background: var(--input-bg); color: var(--text2);
+    font-size: 14px; cursor: pointer; font-weight: 500;
+  }
+  .data-actions button:active { background: #E0E3D8; }
+</style>
+</head>
+<body>
+
+<!-- ===== 顶部：标题 + 日期导航 ===== -->
+<header>
+  <div class="title" id="headerTitle">健身记录</div>
+  <div class="date-nav" id="dateNav">
+    <button onclick="changeDay(-1)">‹</button>
+    <span class="date-label today" id="dateLabel" onclick="goToday()">今天</span>
+    <button onclick="changeDay(1)">›</button>
+  </div>
+</header>
+
+<!-- ===== 记录页 ===== -->
+<div id="pageRecord">
+  <div class="stats">
+    <div class="stat-card">
+      <div class="label">摄入</div>
+      <div><span class="value" id="intakeVal">0</span><span class="unit">千卡</span></div>
+    </div>
+    <div class="stat-card burn">
+      <div class="label">消耗</div>
+      <div><span class="value" id="burnVal">0</span><span class="unit">千卡</span></div>
+    </div>
+    <div class="stat-card net">
+      <div class="label">净值</div>
+      <div><span class="value" id="netVal">0</span><span class="unit">千卡</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>饮食</h2>
+    <div id="foodList"></div>
+  </div>
+
+  <div class="section">
+    <h2>运动</h2>
+    <div id="exerciseList"></div>
+  </div>
+</div>
+
+<!-- ===== 统计页 ===== -->
+<div id="pageStats" style="display:none; padding: 16px;">
+  <div class="section" style="padding:0;">
+    <h2>本周总览</h2>
+    <div class="summary-row"><span>运动总时长</span><span class="v" id="weekMin">0 分钟</span></div>
+    <div class="summary-row"><span>运动总消耗</span><span class="v" id="weekCal">0 千卡</span></div>
+    <div class="summary-row"><span>饮食总摄入</span><span class="v" id="weekIntake">0 千卡</span></div>
+    <div class="summary-row"><span>净收支</span><span class="v" id="weekNet">0 千卡</span></div>
+  </div>
+  <div class="section" style="padding:0; margin-top:20px;">
+    <h2>每日消耗</h2>
+    <div class="chart" id="chart"></div>
+  </div>
+  <div class="section" style="padding:0; margin-top:20px;">
+    <h2>数据管理</h2>
+    <div class="data-actions">
+      <button onclick="exportData()">📤 导出备份</button>
+      <button onclick="importData()">📥 导入恢复</button>
+    </div>
+  </div>
+</div>
+
+<!-- 添加按钮 -->
+<button class="fab" id="fab" onclick="showAddSheet()">+</button>
+
+<!-- 底部导航 -->
+<nav>
+  <button class="active" id="tabRecord" onclick="switchTab('record')">
+    <span class="ic">📝</span>记录
+  </button>
+  <button id="tabStats" onclick="switchTab('stats')">
+    <span class="ic">📊</span>统计
+  </button>
+  <button id="tabPose" onclick="window.location.href='pose.html'">
+    <span class="ic">🎯</span>检测
+  </button>
+</nav>
+
+<!-- 弹窗容器 -->
+<div class="overlay" id="overlay">
+  <div class="dialog" id="dialog"></div>
+</div>
+
+<!-- Toast 提示 -->
+<div class="toast" id="toast"></div>
+
+<!-- 隐藏的文件导入 input -->
+<input type="file" id="importFile" accept=".json" style="display:none">
+
+<script>
+/* ================================================================================
+ * 数据层：localStorage 持久化
+ *
+ * 存储结构：
+ *   fitness_food     → [{id, name, cal, ts}, ...]
+ *   fitness_exercise → [{id, type, dur, cal, ts}, ...]
+ *   fitness_seeded   → '1'（标记示例数据已插入，避免重复）
+ *
+ * ts 为毫秒时间戳，所有日期判断基于本地时区。
+ * ================================================================================ */
+const LS = { food: 'fitness_food', ex: 'fitness_exercise', seeded: 'fitness_seeded' };
+
+/** 读取列表，解析失败返回空数组（容错） */
+function load(key) {
+  try { return JSON.parse(localStorage.getItem(key) || '[]'); }
+  catch (e) { console.warn('数据解析失败:', e); return []; }
+}
+/** 保存列表 */
+function save(key, list) {
+  try { localStorage.setItem(key, JSON.stringify(list)); }
+  catch (e) { toast('存储失败，可能空间不足'); }
+}
+/** 生成自增 id */
+function nextId(list) {
+  return list.length ? Math.max(...list.map(r => r.id)) + 1 : 1;
+}
+
+/* ================================================================================
+ * 日期工具函数
+ * ================================================================================ */
+/** 判断时间戳 ts 是否属于指定日期（年月日都匹配） */
+function isSameDay(ts, date) {
+  const d = new Date(ts);
+  return d.getFullYear() === date.getFullYear() &&
+         d.getMonth() === date.getMonth() &&
+         d.getDate() === date.getDate();
+}
+/** 格式化时分：21:30 */
+function hm(ts) {
+  const d = new Date(ts);
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+/** 星期几：返回"一"~"日" */
+function weekday(d) {
+  return ['日','一','二','三','四','五','六'][new Date(d).getDay()];
+}
+/** 日期标签：今天/昨天/前天/MM月DD日 */
+function dateLabel(date) {
+  const today = new Date();
+  const diff = Math.round((new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() -
+                           new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()) / 86400000);
+  if (diff === 0) return '今天';
+  if (diff === 1) return '昨天';
+  if (diff === 2) return '前天';
+  return `${date.getMonth()+1}月${date.getDate()}日`;
+}
+/** HTML 转义，防止 XSS 注入 */
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ================================================================================
+ * 应用状态
+ * ================================================================================ */
+let currentDay = new Date();      // 当前查看的日期
+let currentTab = 'record';        // 当前 Tab：record / stats
+
+/* ================================================================================
+ * 渲染：记录页
+ * ================================================================================ */
+function renderRecord() {
+  const foods = load(LS.food);
+  const exs = load(LS.ex);
+
+  // 过滤出当前查看日期的记录
+  const dayFood = foods.filter(r => isSameDay(r.ts, currentDay));
+  const dayEx = exs.filter(r => isSameDay(r.ts, currentDay));
+
+  // 统计卡片
+  const intake = dayFood.reduce((s, r) => s + r.cal, 0);
+  const burn = dayEx.reduce((s, r) => s + r.cal, 0);
+  const net = intake - burn;
+  document.getElementById('intakeVal').textContent = intake;
+  document.getElementById('burnVal').textContent = burn;
+  const netEl = document.getElementById('netVal');
+  netEl.textContent = (net > 0 ? '+' : '') + net;
+  netEl.className = 'value ' + (net > 0 ? 'pos' : net < 0 ? 'neg' : '');
+
+  // 日期标签
+  const labelEl = document.getElementById('dateLabel');
+  const lbl = dateLabel(currentDay);
+  labelEl.textContent = lbl;
+  labelEl.classList.toggle('today', lbl === '今天');
+
+  // 饮食列表
+  const foodEl = document.getElementById('foodList');
+  if (!dayFood.length) {
+    foodEl.innerHTML = emptyHTML('🍽️', '该日无饮食记录');
+  } else {
+    // 按时间倒序排列
+    const sorted = [...dayFood].sort((a, b) => b.ts - a.ts);
+    foodEl.innerHTML = sorted.map(r => `
+      <div class="list-item" onclick="editFood(${r.id})">
+        <div class="info">
+          <div class="title">${esc(r.name)}</div>
+          <div class="sub">${hm(r.ts)}</div>
+        </div>
+        <span class="cal">${r.cal} 千卡</span>
+        <button class="del" onclick="event.stopPropagation();delFood(${r.id})">×</button>
+      </div>`).join('');
+  }
+
+  // 运动列表
+  const exEl = document.getElementById('exerciseList');
+  if (!dayEx.length) {
+    exEl.innerHTML = emptyHTML('🏃', '该日无运动记录');
+  } else {
+    const sorted = [...dayEx].sort((a, b) => b.ts - a.ts);
+    exEl.innerHTML = sorted.map(r => `
+      <div class="list-item burn" onclick="editEx(${r.id})">
+        <div class="info">
+          <div class="title">${esc(r.type)}</div>
+          <div class="sub">${r.dur} 分钟 · ${hm(r.ts)}</div>
+        </div>
+        <span class="cal">${r.cal} 千卡</span>
+        <button class="del" onclick="event.stopPropagation();delEx(${r.id})">×</button>
+      </div>`).join('');
+  }
+}
+
+function emptyHTML(icon, text) {
+  return `<div class="empty"><div class="icon">${icon}</div><div class="text">${text}</div></div>`;
+}
+
+/* ================================================================================
+ * 渲染：统计页
+ * ================================================================================ */
+function renderStats() {
+  const foods = load(LS.food);
+  const exs = load(LS.ex);
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+
+  // 最近7天每天的数据
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const dayStart = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i).getTime();
+    const dayEnd = dayStart + 86400000;
+    const cal = exs.filter(r => r.ts >= dayStart && r.ts < dayEnd).reduce((s, r) => s + r.cal, 0);
+    const dur = exs.filter(r => r.ts >= dayStart && r.ts < dayEnd).reduce((s, r) => s + r.dur, 0);
+    const intake = foods.filter(r => r.ts >= dayStart && r.ts < dayEnd).reduce((s, r) => s + r.cal, 0);
+    days.push({ ts: dayStart, cal, dur, intake, isToday: dayStart === todayStart });
+  }
+
+  // 汇总
+  const totalCal = days.reduce((s, d) => s + d.cal, 0);
+  const totalDur = days.reduce((s, d) => s + d.dur, 0);
+  const totalIntake = days.reduce((s, d) => s + d.intake, 0);
+  document.getElementById('weekCal').textContent = totalCal + ' 千卡';
+  document.getElementById('weekMin').textContent = totalDur + ' 分钟';
+  document.getElementById('weekIntake').textContent = totalIntake + ' 千卡';
+  const net = totalIntake - totalCal;
+  document.getElementById('weekNet').textContent = (net > 0 ? '+' : '') + net + ' 千卡';
+
+  // 柱状图：按消耗量绘制
+  const maxVal = Math.max(...days.map(d => d.cal), 1);
+  document.getElementById('chart').innerHTML = days.map(d => `
+    <div class="bar-col">
+      ${d.cal > 0 ? `<div class="bar-val">${d.cal}</div>` : ''}
+      <div class="bar ${d.isToday ? 'today' : ''}" style="height:${120 * d.cal / maxVal}px"></div>
+      <div class="bar-label ${d.isToday ? 'today' : ''}">周${weekday(d.ts)}</div>
+    </div>`).join('');
+}
+
+/* ================================================================================
+ * Tab 切换
+ * ================================================================================ */
+function switchTab(name) {
+  currentTab = name;
+  const isRecord = name === 'record';
+  document.getElementById('pageRecord').style.display = isRecord ? '' : 'none';
+  document.getElementById('pageStats').style.display = isRecord ? 'none' : '';
+  document.getElementById('tabRecord').classList.toggle('active', isRecord);
+  document.getElementById('tabStats').classList.toggle('active', !isRecord);
+  document.getElementById('fab').style.display = isRecord ? '' : 'none';
+  document.getElementById('dateNav').style.display = isRecord ? '' : 'none';
+  document.getElementById('headerTitle').textContent = isRecord ? '健身记录' : '周统计';
+  if (!isRecord) renderStats();
+  else renderRecord();
+}
+
+/* ================================================================================
+ * 日期导航
+ * ================================================================================ */
+function changeDay(delta) {
+  currentDay = new Date(currentDay.getFullYear(), currentDay.getMonth(), currentDay.getDate() + delta);
+  renderRecord();
+}
+function goToday() {
+  currentDay = new Date();
+  renderRecord();
+}
+
+/* ================================================================================
+ * 添加记录：底部弹出选择菜单
+ * ================================================================================ */
+function showAddSheet() {
+  showDialog(`
+    <h3>添加记录</h3>
+    <div class="menu-item" onclick="closeDialog();showFoodDialog()">
+      <span class="mi-icon">🍽️</span> 记录饮食
+    </div>
+    <div class="menu-item" onclick="closeDialog();showExDialog()">
+      <span class="mi-icon">🏃</span> 记录运动
+    </div>
+    <div class="btns" style="margin-top:14px;">
+      <button class="btn-cancel" onclick="closeDialog()">取消</button>
+    </div>
+  `);
+}
+
+/* ================================================================================
+ * 饮食：添加 / 编辑 / 删除
+ * ================================================================================ */
+function showFoodDialog(editId) {
+  const list = load(LS.food);
+  const item = editId ? list.find(r => r.id === editId) : null;
+  const title = item ? '编辑饮食' : '记录饮食';
+  showDialog(`
+    <h3>${title}</h3>
+    <input id="fName" placeholder="食物名称，如 鸡胸肉" value="${item ? esc(item.name) : ''}">
+    <input id="fCal" type="number" placeholder="热量(千卡)，如 180" value="${item ? item.cal : ''}">
+    <div class="btns">
+      <button class="btn-cancel" onclick="closeDialog()">取消</button>
+      ${item ? `<button class="btn-danger" onclick="delFood(${item.id})">删除</button>` : ''}
+      <button class="btn-save" onclick="saveFood(${editId || 0})">保存</button>
+    </div>
+  `);
+  setTimeout(() => document.getElementById('fName').focus(), 100);
+}
+function saveFood(editId) {
+  const name = document.getElementById('fName').value.trim();
+  const cal = parseInt(document.getElementById('fCal').value);
+  if (!name) return toast('请输入名称');
+  if (!cal || cal <= 0) return toast('请输入大于0的热量');
+
+  const list = load(LS.food);
+  if (editId) {
+    // 编辑：找到并更新
+    const idx = list.findIndex(r => r.id === editId);
+    if (idx < 0) return toast('记录不存在');
+    list[idx] = { ...list[idx], name, cal };
+  } else {
+    // 新增：使用当前查看日期的时间（如果是历史日期，用当天中午）
+    const ts = new Date(currentDay.getFullYear(), currentDay.getMonth(),
+                        currentDay.getDate(), 12, 0).getTime();
+    list.push({ id: nextId(list), name, cal, ts });
+  }
+  save(LS.food, list);
+  closeDialog();
+  renderRecord();
+  toast(editId ? '已更新' : '已保存');
+}
+function editFood(id) { showFoodDialog(id); }
+function delFood(id) {
+  if (!confirm('删除该条饮食记录？')) return;
+  save(LS.food, load(LS.food).filter(r => r.id !== id));
+  closeDialog();
+  renderRecord();
+  toast('已删除');
+}
+
+/* ================================================================================
+ * 运动：添加 / 编辑 / 删除
+ * ================================================================================ */
+const EX_PRESETS = ['跑步','快走','骑行','俯卧撑','深蹲','瑜伽','游泳','跳绳','哑铃','平板支撑'];
+
+function showExDialog(editId) {
+  const list = load(LS.ex);
+  const item = editId ? list.find(r => r.id === editId) : null;
+  const title = item ? '编辑运动' : '记录运动';
+  showDialog(`
+    <h3>${title}</h3>
+    <input id="eType" placeholder="运动类型，如 跑步" value="${item ? esc(item.type) : ''}">
+    <div class="chips">${EX_PRESETS.map(t =>
+      `<button class="chip ${item && item.type === t ? 'active' : ''}" onclick="pickType(this,'${t}')">${t}</button>`
+    ).join('')}</div>
+    <input id="eDur" type="number" placeholder="时长(分钟)，如 30" value="${item ? item.dur : ''}">
+    <input id="eCal" type="number" placeholder="消耗(千卡)，如 240" value="${item ? item.cal : ''}">
+    <div class="btns">
+      <button class="btn-cancel" onclick="closeDialog()">取消</button>
+      ${item ? `<button class="btn-danger" onclick="delEx(${item.id})">删除</button>` : ''}
+      <button class="btn-save" onclick="saveEx(${editId || 0})">保存</button>
+    </div>
+  `);
+  setTimeout(() => document.getElementById('eType').focus(), 100);
+}
+function pickType(btn, type) {
+  document.getElementById('eType').value = type;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+}
+function saveEx(editId) {
+  const type = document.getElementById('eType').value.trim();
+  const dur = parseInt(document.getElementById('eDur').value);
+  const cal = parseInt(document.getElementById('eCal').value);
+  if (!type) return toast('请输入运动类型');
+  if (!dur || dur <= 0) return toast('请输入大于0的时长');
+  if (!cal || cal <= 0) return toast('请输入大于0的消耗');
+
+  const list = load(LS.ex);
+  if (editId) {
+    const idx = list.findIndex(r => r.id === editId);
+    if (idx < 0) return toast('记录不存在');
+    list[idx] = { ...list[idx], type, dur, cal };
+  } else {
+    const ts = new Date(currentDay.getFullYear(), currentDay.getMonth(),
+                        currentDay.getDate(), 12, 0).getTime();
+    list.push({ id: nextId(list), type, dur, cal, ts });
+  }
+  save(LS.ex, list);
+  closeDialog();
+  renderRecord();
+  toast(editId ? '已更新' : '已保存');
+}
+function editEx(id) { showExDialog(id); }
+function delEx(id) {
+  if (!confirm('删除该条运动记录？')) return;
+  save(LS.ex, load(LS.ex).filter(r => r.id !== id));
+  closeDialog();
+  renderRecord();
+  toast('已删除');
+}
+
+/* ================================================================================
+ * 数据导出 / 导入
+ * ================================================================================ */
+function exportData() {
+  const data = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    food: load(LS.food),
+    exercise: load(LS.ex),
+  };
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `fitness_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('备份已导出');
+}
+function importData() {
+  document.getElementById('importFile').click();
+}
+document.getElementById('importFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!data.food || !data.exercise) throw new Error('格式不对');
+    if (!confirm(`将导入 ${data.food.length} 条饮食 + ${data.exercise.length} 条运动记录，\n会覆盖现有数据，确认？`)) return;
+    save(LS.food, data.food);
+    save(LS.ex, data.exercise);
+    renderRecord();
+    toast('导入成功');
+  } catch (err) {
+    toast('导入失败：文件格式不正确');
+  }
+  e.target.value = ''; // 重置，允许重复导入同一文件
+});
+
+/* ================================================================================
+ * 弹窗与 Toast 工具
+ * ================================================================================ */
+function showDialog(html) {
+  document.getElementById('dialog').innerHTML = html;
+  document.getElementById('overlay').classList.add('show');
+}
+function closeDialog() {
+  document.getElementById('overlay').classList.remove('show');
+}
+document.getElementById('overlay').addEventListener('click', e => {
+  if (e.target.id === 'overlay') closeDialog();
+});
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+/* ================================================================================
+ * 示例数据：首次打开时插入，让用户立即看到非空界面
+ * ================================================================================ */
+function seedDemoData() {
+  if (localStorage.getItem(LS.seeded)) return;
+  const now = new Date();
+  const day = (offset, h, m) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset, h, m).getTime();
+
+  const food = [
+    { id: 1, name: '鸡胸肉', cal: 180, ts: day(0, 12, 30) },
+    { id: 2, name: '糙米饭', cal: 130, ts: day(0, 12, 35) },
+    { id: 3, name: '三明治', cal: 250, ts: day(-1, 13, 0) },
+    { id: 4, name: '苹果', cal: 52, ts: day(-1, 15, 30) },
+    { id: 5, name: '燕麦粥', cal: 150, ts: day(-2, 8, 0) },
+    { id: 6, name: '鸡蛋', cal: 78, ts: day(-3, 8, 30) },
+    { id: 7, name: '牛排', cal: 320, ts: day(-3, 19, 0) },
+    { id: 8, name: '沙拉', cal: 120, ts: day(-4, 12, 0) },
+    { id: 9, name: '香蕉', cal: 89, ts: day(-5, 10, 0) },
+  ];
+  const ex = [
+    { id: 1, type: '跑步', dur: 30, cal: 240, ts: day(0, 7, 0) },
+    { id: 2, type: '深蹲', dur: 15, cal: 90, ts: day(-1, 18, 0) },
+    { id: 3, type: '瑜伽', dur: 40, cal: 150, ts: day(-2, 20, 0) },
+    { id: 4, type: '跑步', dur: 25, cal: 200, ts: day(-3, 6, 30) },
+    { id: 5, type: '骑行', dur: 45, cal: 350, ts: day(-4, 17, 0) },
+    { id: 6, type: '俯卧撑', dur: 10, cal: 60, ts: day(-5, 8, 0) },
+    { id: 7, type: '游泳', dur: 30, cal: 280, ts: day(-6, 19, 0) },
+  ];
+  save(LS.food, food);
+  save(LS.ex, ex);
+  localStorage.setItem(LS.seeded, '1');
+}
+
+/* ================================================================================
+ * 启动
+ * ================================================================================ */
+seedDemoData();
+renderRecord();
+</script>
+
+<script>
+// 动作检测页面（base64编码的pose.html），点击"检测"时用Blob URL打开
+var POSE_HTML_B64 = "PCFET0NUWVBFIGh0bWw+CjxodG1sIGxhbmc9InpoLUNOIj4KPGhlYWQ+CjxtZXRhIGNoYXJzZXQ9IlVURi04Ij4KPG1ldGEgbmFtZT0idmlld3BvcnQiIGNvbnRlbnQ9IndpZHRoPWRldmljZS13aWR0aCwgaW5pdGlhbC1zY2FsZT0xLjAsIHVzZXItc2NhbGFibGU9bm8iPgo8dGl0bGU+5Yqo5L2c5qOA5rWLPC90aXRsZT4KPHN0eWxlPgogIC8qID09PT09IOaegeeugOS4u+mimO+8iOS4jiBpbmRleC5odG1sIOe7n+S4gO+8iSA9PT09PSAqLwogIDpyb290IHsKICAgIC0tcHJpbWFyeTogIzJFNUQ0RTsKICAgIC0tYmc6ICNGN0Y4RjU7CiAgICAtLWNhcmQ6ICNGRkZGRkY7CiAgICAtLXRleHQ6ICMxQTFBMUE7CiAgICAtLXRleHQyOiAjNEE0QTRBOwogICAgLS10ZXh0MzogIzk5OTsKICAgIC0tZ29vZDogIzJFN0QzMjsKICAgIC0td2FybjogI0Y1N0MwMDsKICAgIC0tZGFuZ2VyOiAjRTU1MzNDOwogICAgLS1yYWRpdXM6IDEycHg7CiAgICAtLWlucHV0LWJnOiAjRjJGM0VFOwogIH0KICAqIHsgbWFyZ2luOiAwOyBwYWRkaW5nOiAwOyBib3gtc2l6aW5nOiBib3JkZXItYm94OyAtd2Via2l0LXRhcC1oaWdobGlnaHQtY29sb3I6IHRyYW5zcGFyZW50OyB9CiAgYm9keSB7CiAgICBmb250LWZhbWlseTogLWFwcGxlLXN5c3RlbSwgIlNlZ29lIFVJIiwgIk1pY3Jvc29mdCBZYUhlaSIsIHNhbnMtc2VyaWY7CiAgICBiYWNrZ3JvdW5kOiB2YXIoLS1iZyk7IGNvbG9yOiB2YXIoLS10ZXh0KTsKICAgIG1heC13aWR0aDogNDgwcHg7IG1hcmdpbjogMCBhdXRvOyBtaW4taGVpZ2h0OiAxMDB2aDsKICAgIGRpc3BsYXk6IGZsZXg7IGZsZXgtZGlyZWN0aW9uOiBjb2x1bW47CiAgfQoKICAvKiA9PT09PSDpobbpg6jmoI8gPT09PT0gKi8KICBoZWFkZXIgewogICAgYmFja2dyb3VuZDogdmFyKC0tY2FyZCk7IHBhZGRpbmc6IDE0cHggMTZweDsKICAgIGJvcmRlci1ib3R0b206IDFweCBzb2xpZCAjRUVFOyBkaXNwbGF5OiBmbGV4OyBhbGlnbi1pdGVtczogY2VudGVyOyBnYXA6IDEycHg7CiAgICBwb3NpdGlvbjogc3RpY2t5OyB0b3A6IDA7IHotaW5kZXg6IDUwOwogIH0KICBoZWFkZXIgLmJhY2sgewogICAgYmFja2dyb3VuZDogbm9uZTsgYm9yZGVyOiBub25lOyBmb250LXNpemU6IDIycHg7IGNvbG9yOiB2YXIoLS10ZXh0Myk7CiAgICBjdXJzb3I6IHBvaW50ZXI7IHBhZGRpbmc6IDRweCA4cHg7IGJvcmRlci1yYWRpdXM6IDhweDsKICB9CiAgaGVhZGVyIC5iYWNrOmFjdGl2ZSB7IGJhY2tncm91bmQ6IHZhcigtLWlucHV0LWJnKTsgfQogIGhlYWRlciAudGl0bGUgeyBmb250LXNpemU6IDE4cHg7IGZvbnQtd2VpZ2h0OiA2MDA7IH0KCiAgLyogPT09PT0g5Yqo5L2c6YCJ5oupID09PT09ICovCiAgLmFjdGlvbnMgeyBwYWRkaW5nOiAxNnB4OyBkaXNwbGF5OiBmbGV4OyBnYXA6IDhweDsgZmxleC13cmFwOiB3cmFwOyB9CiAgLmFjdGlvbi1idG4gewogICAgZmxleDogMTsgbWluLXdpZHRoOiA4MHB4OyBwYWRkaW5nOiAxMnB4IDhweDsgYm9yZGVyOiAycHggc29saWQgI0VFRTsKICAgIGJvcmRlci1yYWRpdXM6IHZhcigtLXJhZGl1cyk7IGJhY2tncm91bmQ6IHZhcigtLWNhcmQpOyBjdXJzb3I6IHBvaW50ZXI7CiAgICBmb250LXNpemU6IDE0cHg7IGNvbG9yOiB2YXIoLS10ZXh0Mik7IHRleHQtYWxpZ246IGNlbnRlcjsKICAgIHRyYW5zaXRpb246IGFsbCAwLjE1czsKICB9CiAgLmFjdGlvbi1idG4gLmljIHsgZm9udC1zaXplOiAyNHB4OyBkaXNwbGF5OiBibG9jazsgbWFyZ2luLWJvdHRvbTogNHB4OyB9CiAgLmFjdGlvbi1idG4uYWN0aXZlIHsgYm9yZGVyLWNvbG9yOiB2YXIoLS1wcmltYXJ5KTsgY29sb3I6IHZhcigtLXByaW1hcnkpOyBmb250LXdlaWdodDogNjAwOyB9CiAgLmFjdGlvbi1idG46YWN0aXZlIHsgdHJhbnNmb3JtOiBzY2FsZSgwLjk3KTsgfQoKICAvKiA9PT09PSDmkYTlg4/lpLTnlLvpnaLljLogPT09PT0gKi8KICAuY2FtZXJhLXdyYXAgewogICAgbWFyZ2luOiAwIDE2cHg7IGJvcmRlci1yYWRpdXM6IHZhcigtLXJhZGl1cyk7IG92ZXJmbG93OiBoaWRkZW47CiAgICBiYWNrZ3JvdW5kOiAjMDAwOyBwb3NpdGlvbjogcmVsYXRpdmU7IGFzcGVjdC1yYXRpbzogNC8zOwogIH0KICAuY2FtZXJhLXdyYXAgdmlkZW8sIC5jYW1lcmEtd3JhcCBjYW52YXMgewogICAgcG9zaXRpb246IGFic29sdXRlOyB0b3A6IDA7IGxlZnQ6IDA7IHdpZHRoOiAxMDAlOyBoZWlnaHQ6IDEwMCU7CiAgICBvYmplY3QtZml0OiBjb3ZlcjsgdHJhbnNmb3JtOiBzY2FsZVgoLTEpOyAvKiDplZzlg4/vvIzmm7Toh6rnhLYgKi8KICB9CiAgLmNhbWVyYS13cmFwIC5wbGFjZWhvbGRlciB7CiAgICBwb3NpdGlvbjogYWJzb2x1dGU7IGluc2V0OiAwOyBkaXNwbGF5OiBmbGV4OyBmbGV4LWRpcmVjdGlvbjogY29sdW1uOwogICAgYWxpZ24taXRlbXM6IGNlbnRlcjsganVzdGlmeS1jb250ZW50OiBjZW50ZXI7IGNvbG9yOiAjNjY2OyBnYXA6IDhweDsKICB9CiAgLmNhbWVyYS13cmFwIC5wbGFjZWhvbGRlciAuaWMgeyBmb250LXNpemU6IDQ4cHg7IG9wYWNpdHk6IDAuNDsgfQoKICAvKiA9PT09PSDlrp7ml7blj43ppoggPT09PT0gKi8KICAuZmVlZGJhY2sgewogICAgbWFyZ2luOiAxMnB4IDE2cHg7IHBhZGRpbmc6IDE2cHg7IGJvcmRlci1yYWRpdXM6IHZhcigtLXJhZGl1cyk7CiAgICBiYWNrZ3JvdW5kOiB2YXIoLS1jYXJkKTsgdGV4dC1hbGlnbjogY2VudGVyOyBtaW4taGVpZ2h0OiA3MnB4OwogICAgZGlzcGxheTogZmxleDsgZmxleC1kaXJlY3Rpb246IGNvbHVtbjsganVzdGlmeS1jb250ZW50OiBjZW50ZXI7CiAgfQogIC5mZWVkYmFjayAubXNnIHsgZm9udC1zaXplOiAyMHB4OyBmb250LXdlaWdodDogNzAwOyB9CiAgLmZlZWRiYWNrIC5oaW50IHsgZm9udC1zaXplOiAxM3B4OyBjb2xvcjogdmFyKC0tdGV4dDMpOyBtYXJnaW4tdG9wOiA0cHg7IH0KICAuZmVlZGJhY2suZ29vZCAubXNnIHsgY29sb3I6IHZhcigtLWdvb2QpOyB9CiAgLmZlZWRiYWNrLndhcm4gLm1zZyB7IGNvbG9yOiB2YXIoLS13YXJuKTsgfQogIC5mZWVkYmFjay5iYWQgLm1zZyB7IGNvbG9yOiB2YXIoLS1kYW5nZXIpOyB9CiAgLmZlZWRiYWNrLmlkbGUgLm1zZyB7IGNvbG9yOiB2YXIoLS10ZXh0Myk7IH0KCiAgLyogPT09PT0g6K6h5pWwL+iuoeaXtiA9PT09PSAqLwogIC5jb3VudGVyIHsKICAgIG1hcmdpbjogMCAxNnB4OyBwYWRkaW5nOiAyMHB4OyBib3JkZXItcmFkaXVzOiB2YXIoLS1yYWRpdXMpOwogICAgYmFja2dyb3VuZDogdmFyKC0tY2FyZCk7IHRleHQtYWxpZ246IGNlbnRlcjsKICB9CiAgLmNvdW50ZXIgLm51bSB7IGZvbnQtc2l6ZTogNDhweDsgZm9udC13ZWlnaHQ6IDcwMDsgY29sb3I6IHZhcigtLXByaW1hcnkpOyB9CiAgLmNvdW50ZXIgLnVuaXQgeyBmb250LXNpemU6IDE0cHg7IGNvbG9yOiB2YXIoLS10ZXh0Myk7IG1hcmdpbi10b3A6IDRweDsgfQoKICAvKiA9PT09PSDmjqfliLbmjInpkq4gPT09PT0gKi8KICAuY29udHJvbHMgeyBtYXJnaW46IDE2cHg7IGRpc3BsYXk6IGZsZXg7IGdhcDogMTBweDsgfQogIC5jb250cm9scyBidXR0b24gewogICAgZmxleDogMTsgcGFkZGluZzogMTRweDsgYm9yZGVyOiBub25lOyBib3JkZXItcmFkaXVzOiAxMHB4OwogICAgZm9udC1zaXplOiAxNnB4OyBmb250LXdlaWdodDogNjAwOyBjdXJzb3I6IHBvaW50ZXI7CiAgfQogIC5idG4tc3RhcnQgeyBiYWNrZ3JvdW5kOiB2YXIoLS1wcmltYXJ5KTsgY29sb3I6ICNGRkY7IH0KICAuYnRuLXN0b3AgeyBiYWNrZ3JvdW5kOiB2YXIoLS1kYW5nZXIpOyBjb2xvcjogI0ZGRjsgfQogIC5idG4tc2F2ZSB7IGJhY2tncm91bmQ6IHZhcigtLWlucHV0LWJnKTsgY29sb3I6IHZhcigtLXRleHQyKTsgfQogIC5jb250cm9scyBidXR0b246YWN0aXZlIHsgdHJhbnNmb3JtOiBzY2FsZSgwLjk4KTsgfQogIC5jb250cm9scyBidXR0b246ZGlzYWJsZWQgeyBvcGFjaXR5OiAwLjQ7IGN1cnNvcjogbm90LWFsbG93ZWQ7IH0KCiAgLyogPT09PT0g5Yqg6L295o+Q56S6ID09PT09ICovCiAgLmxvYWRpbmcgewogICAgcG9zaXRpb246IGZpeGVkOyBpbnNldDogMDsgYmFja2dyb3VuZDogcmdiYSgyNTUsMjU1LDI1NSwwLjkpOwogICAgZGlzcGxheTogbm9uZTsgZmxleC1kaXJlY3Rpb246IGNvbHVtbjsgYWxpZ24taXRlbXM6IGNlbnRlcjsganVzdGlmeS1jb250ZW50OiBjZW50ZXI7CiAgICB6LWluZGV4OiA5OTk7IGdhcDogMTJweDsKICB9CiAgLmxvYWRpbmcuc2hvdyB7IGRpc3BsYXk6IGZsZXg7IH0KICAubG9hZGluZyAuc3Bpbm5lciB7CiAgICB3aWR0aDogNDBweDsgaGVpZ2h0OiA0MHB4OyBib3JkZXI6IDRweCBzb2xpZCAjRUVFOwogICAgYm9yZGVyLXRvcC1jb2xvcjogdmFyKC0tcHJpbWFyeSk7IGJvcmRlci1yYWRpdXM6IDUwJTsKICAgIGFuaW1hdGlvbjogc3BpbiAwLjhzIGxpbmVhciBpbmZpbml0ZTsKICB9CiAgQGtleWZyYW1lcyBzcGluIHsgdG8geyB0cmFuc2Zvcm06IHJvdGF0ZSgzNjBkZWcpOyB9IH0KCiAgLyogPT09PT0gVG9hc3QgPT09PT0gKi8KICAudG9hc3QgewogICAgcG9zaXRpb246IGZpeGVkOyBib3R0b206IDI0cHg7IGxlZnQ6IDUwJTsgdHJhbnNmb3JtOiB0cmFuc2xhdGVYKC01MCUpOwogICAgYmFja2dyb3VuZDogIzMzMzsgY29sb3I6ICNGRkY7IHBhZGRpbmc6IDEwcHggMjBweDsKICAgIGJvcmRlci1yYWRpdXM6IDhweDsgZm9udC1zaXplOiAxNHB4OyB6LWluZGV4OiAzMDA7CiAgICBvcGFjaXR5OiAwOyB0cmFuc2l0aW9uOiBvcGFjaXR5IDAuM3M7IHBvaW50ZXItZXZlbnRzOiBub25lOwogIH0KICAudG9hc3Quc2hvdyB7IG9wYWNpdHk6IDE7IH0KPC9zdHlsZT4KPC9oZWFkPgo8Ym9keT4KCjwhLS0g6aG26YOo5qCPIC0tPgo8aGVhZGVyPgogIDxidXR0b24gY2xhc3M9ImJhY2siIG9uY2xpY2s9ImdvQmFjaygpIj7igLk8L2J1dHRvbj4KICA8c3BhbiBjbGFzcz0idGl0bGUiPuWKqOS9nOajgOa1izwvc3Bhbj4KPC9oZWFkZXI+Cgo8IS0tIOWKqOS9nOmAieaLqSAtLT4KPGRpdiBjbGFzcz0iYWN0aW9ucyIgaWQ9ImFjdGlvblNlbGVjdCI+CiAgPGJ1dHRvbiBjbGFzcz0iYWN0aW9uLWJ0biBhY3RpdmUiIGRhdGEtYWN0aW9uPSJzcXVhdCIgb25jbGljaz0ic2VsZWN0QWN0aW9uKCdzcXVhdCcpIj4KICAgIDxzcGFuIGNsYXNzPSJpYyI+8J+mtTwvc3Bhbj7mt7HoubIKICA8L2J1dHRvbj4KICA8YnV0dG9uIGNsYXNzPSJhY3Rpb24tYnRuIiBkYXRhLWFjdGlvbj0icHVzaHVwIiBvbmNsaWNrPSJzZWxlY3RBY3Rpb24oJ3B1c2h1cCcpIj4KICAgIDxzcGFuIGNsYXNzPSJpYyI+8J+Sqjwvc3Bhbj7kv6/ljafmkpEKICA8L2J1dHRvbj4KICA8YnV0dG9uIGNsYXNzPSJhY3Rpb24tYnRuIiBkYXRhLWFjdGlvbj0iY3VybCIgb25jbGljaz0ic2VsZWN0QWN0aW9uKCdjdXJsJykiPgogICAgPHNwYW4gY2xhc3M9ImljIj7wn4+L77iPPC9zcGFuPuW8r+S4vgogIDwvYnV0dG9uPgogIDxidXR0b24gY2xhc3M9ImFjdGlvbi1idG4iIGRhdGEtYWN0aW9uPSJwbGFuayIgb25jbGljaz0ic2VsZWN0QWN0aW9uKCdwbGFuaycpIj4KICAgIDxzcGFuIGNsYXNzPSJpYyI+8J+nmDwvc3Bhbj7lubPmnb8KICA8L2J1dHRvbj4KPC9kaXY+Cgo8IS0tIOaRhOWDj+WktOeUu+mdoiAtLT4KPGRpdiBjbGFzcz0iY2FtZXJhLXdyYXAiIGlkPSJjYW1lcmFXcmFwIj4KICA8dmlkZW8gaWQ9InZpZGVvIiBwbGF5c2lubGluZT48L3ZpZGVvPgogIDxjYW52YXMgaWQ9ImNhbnZhcyI+PC9jYW52YXM+CiAgPGRpdiBjbGFzcz0icGxhY2Vob2xkZXIiIGlkPSJwbGFjZWhvbGRlciI+CiAgICA8c3BhbiBjbGFzcz0iaWMiPvCfk7c8L3NwYW4+CiAgICA8c3Bhbj7ngrnlh7si5byA5aeL5qOA5rWLIuWQr+WKqOaRhOWDj+WktDwvc3Bhbj4KICA8L2Rpdj4KPC9kaXY+Cgo8IS0tIOWunuaXtuWPjemmiCAtLT4KPGRpdiBjbGFzcz0iZmVlZGJhY2sgaWRsZSIgaWQ9ImZlZWRiYWNrIj4KICA8ZGl2IGNsYXNzPSJtc2ciPumAieaLqeWKqOS9nO+8jOW8gOWni+ajgOa1izwvZGl2PgogIDxkaXYgY2xhc3M9ImhpbnQiPuivt+ermeWcqOaRhOWDj+WktOWJjSAxLTIg57Gz5aSE77yM56Gu5L+d5YWo6Lqr5Y+v6KeBPC9kaXY+CjwvZGl2PgoKPCEtLSDorqHmlbAv6K6h5pe2IC0tPgo8ZGl2IGNsYXNzPSJjb3VudGVyIiBpZD0iY291bnRlckJveCI+CiAgPGRpdiBjbGFzcz0ibnVtIiBpZD0iY291bnROdW0iPjA8L2Rpdj4KICA8ZGl2IGNsYXNzPSJ1bml0IiBpZD0iY291bnRVbml0Ij7mrKE8L2Rpdj4KPC9kaXY+Cgo8IS0tIOaOp+WItuaMiemSriAtLT4KPGRpdiBjbGFzcz0iY29udHJvbHMiPgogIDxidXR0b24gY2xhc3M9ImJ0bi1zdGFydCIgaWQ9ImJ0blN0YXJ0IiBvbmNsaWNrPSJzdGFydERldGVjdGlvbigpIj7lvIDlp4vmo4DmtYs8L2J1dHRvbj4KICA8YnV0dG9uIGNsYXNzPSJidG4tc3RvcCIgaWQ9ImJ0blN0b3AiIG9uY2xpY2s9InN0b3BEZXRlY3Rpb24oKSIgZGlzYWJsZWQ+5YGc5q2iPC9idXR0b24+CiAgPGJ1dHRvbiBjbGFzcz0iYnRuLXNhdmUiIGlkPSJidG5TYXZlIiBvbmNsaWNrPSJzYXZlUmVjb3JkKCkiIGRpc2FibGVkPuS/neWtmOiusOW9lTwvYnV0dG9uPgo8L2Rpdj4KCjwhLS0g5Yqg6L295o+Q56S6IC0tPgo8ZGl2IGNsYXNzPSJsb2FkaW5nIiBpZD0ibG9hZGluZyI+CiAgPGRpdiBjbGFzcz0ic3Bpbm5lciI+PC9kaXY+CiAgPGRpdiBpZD0ibG9hZGluZ1RleHQiPuato+WcqOWKoOi9veajgOa1i+aooeWeiy4uLjwvZGl2Pgo8L2Rpdj4KCjwhLS0gVG9hc3QgLS0+CjxkaXYgY2xhc3M9InRvYXN0IiBpZD0idG9hc3QiPjwvZGl2PgoKPCEtLSA9PT09PSBNZWRpYVBpcGUgUG9zZe+8iENETiDliqDovb3vvIkgPT09PT0gLS0+CjxzY3JpcHQgc3JjPSJodHRwczovL2Nkbi5qc2RlbGl2ci5uZXQvbnBtL0BtZWRpYXBpcGUvY2FtZXJhX3V0aWxzL2NhbWVyYV91dGlscy5qcyIgY3Jvc3NvcmlnaW49ImFub255bW91cyI+PC9zY3JpcHQ+CjxzY3JpcHQgc3JjPSJodHRwczovL2Nkbi5qc2RlbGl2ci5uZXQvbnBtL0BtZWRpYXBpcGUvZHJhd2luZ191dGlscy9kcmF3aW5nX3V0aWxzLmpzIiBjcm9zc29yaWdpbj0iYW5vbnltb3VzIj48L3NjcmlwdD4KPHNjcmlwdCBzcmM9Imh0dHBzOi8vY2RuLmpzZGVsaXZyLm5ldC9ucG0vQG1lZGlhcGlwZS9wb3NlL3Bvc2UuanMiIGNyb3Nzb3JpZ2luPSJhbm9ueW1vdXMiPjwvc2NyaXB0PgoKPHNjcmlwdD4KLyogPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0KICog5Yqo5L2c5qOA5rWL6aG16Z2iCiAqCiAqIOaKgOacr+aWueahiO+8mk1lZGlhUGlwZSBQb3Nl77yIR29vZ2xlIOa1j+iniOWZqOerr+WunuaXtuS6uuS9k+Wnv+aAgeajgOa1i++8iQogKiAtIOmAmui/hyBDRE4g5Yqg6L2977yM57qv5YmN56uv6L+Q6KGM77yM5peg6ZyA5ZCO56uvCiAqIC0g5qOA5rWLIDMzIOS4qui6q+S9k+WFs+mUrueCue+8jOeUqOWFs+iKguinkuW6puWIpOaWreWKqOS9nOaYr+WQpuWIsOS9jQogKiAtIOWunuaXtuaWh+Wtlyvlo7Dpn7Pmj5DphpLvvIzoh6rliqjorqHmlbAKICoKICog5pSv5oyB55qE5Yqo5L2c77ya5rex6Lmy44CB5L+v5Y2n5pKR44CB5LqM5aS05byv5Li+44CB5bmz5p2/5pSv5pKRCiAqID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09ICovCgovLyA9PT09PSDlhajlsYDnirbmgIEgPT09PT0KbGV0IGN1cnJlbnRBY3Rpb24gPSAnc3F1YXQnOyAgIC8vIOW9k+WJjeWKqOS9nOexu+WeiwpsZXQgaXNSdW5uaW5nID0gZmFsc2U7ICAgICAgICAgIC8vIOaYr+WQpuato+WcqOajgOa1iwpsZXQgY291bnQgPSAwOyAgICAgICAgICAgICAgICAgIC8vIOWKqOS9nOiuoeaVsApsZXQgcGxhbmtTdGFydFRpbWUgPSAwOyAgICAgICAgIC8vIOW5s+adv+aUr+aSkeiuoeaXtui1t+eCuQpsZXQgcG9zZVN0YXRlID0gJ2lkbGUnOyAgICAgICAgIC8vIOWKqOS9nOeKtuaAgeacuueKtuaAgQpsZXQgbGFzdEZlZWRiYWNrVGltZSA9IDA7ICAgICAgIC8vIOS4iuasoeWPjemmiOaXtumXtO+8iOiKgua1ge+8iQpsZXQgcG9zZSA9IG51bGw7ICAgICAgICAgICAgICAgIC8vIE1lZGlhUGlwZSBQb3NlIOWunuS+iwpsZXQgY2FtZXJhID0gbnVsbDsgICAgICAgICAgICAgIC8vIENhbWVyYSDlrp7kvosKbGV0IGxhc3RMYW5kbWFya3MgPSBudWxsOyAgICAgICAvLyDmnIDov5HkuIDluKflhbPplK7ngrkKbGV0IHN0YXRlQ29uZmlybUZyYW1lcyA9IDA7ICAgICAvLyDnirbmgIHnoa7orqTluKforqHmlbDvvIjpmLLmipbvvIkKbGV0IHBlbmRpbmdTdGF0ZSA9IG51bGw7ICAgICAgICAvLyDlvoXnoa7orqTnmoTkuIvkuIDnirbmgIEKbGV0IGxhc3RDb3VudFRpbWUgPSAwOyAgICAgICAgICAvLyDkuIrmrKHorqHmlbDml7bpl7TvvIjlhrfljbTvvIkKY29uc3QgQ09ORklSTV9GUkFNRVMgPSAzOyAgICAgICAvLyDnirbmgIHliIfmjaLpnIDov57nu61O5bin56Gu6K6k77yM6Ziy5Y2V5bin5oqW5YqoCmNvbnN0IENPVU5UX0NPT0xET1dOID0gNjAwOyAgICAgLy8g6K6h5pWw5Ya35Y205pyfKG1zKe+8jOmYsui/nue7reivr+iuoQoKLy8gPT09PT0g5Yqo5L2c6YWN572uID09PT09Ci8vIOavj+enjeWKqOS9nOWumuS5ie+8muWFs+mUrueCuee0ouW8leOAgeinkuW6pumYiOWAvOOAgeaPkOekuuaWh+ahiApjb25zdCBBQ1RJT05TID0gewogIHNxdWF0OiB7CiAgICBuYW1lOiAn5rex6LmyJywKICAgIHVuaXQ6ICfmrKEnLAogICAgLy8g55So5Y+z5L6n5YWz6ZSu54K577ya6auLKDI0KSDohp0oMjYpIOi4nSgyOCkKICAgIHBvaW50czogeyBhOiAyNCwgYjogMjYsIGM6IDI4IH0sCiAgICAvLyDohp3nm5bop5LluqbvvJrnq5nnq4s+MTUwwrDvvIzliLDkvY08MTEwwrDvvIjngbXmlY/luqbmj5Dpq5jvvIkKICAgIHRocmVzaG9sZERvd246IDk1LCAgICAvLyDliLDkvY3op5LluqbmlLbntKfvvIzlv4XpobvoubLliLDkvY0KICAgIHRocmVzaG9sZFVwOiAxNjUsICAgICAvLyDmgaLlpI3op5Lluqbmj5Dpq5jvvIzlv4XpobvlhYXliIbnq5notbcKICAgIGhpbnRHb29kOiAn6Lmy5Yiw5L2N5LqG77yB6LW356uLJywKICAgIGhpbnRXYXJuOiAn5YaN6Lmy5L2O5LiA54K5JywKICAgIGhpbnRTdGFydDogJ+W8gOWni+S4i+i5sicsCiAgICBwYXJ0czogJ+mri+mDqOOAgeiGneebluOAgeiEmui4nScsICAvLyDor6XliqjkvZzlj6rpnIDov5nkupvpg6jkvY3lhaXplZzljbPlj68KICB9LAogIHB1c2h1cDogewogICAgbmFtZTogJ+S/r+WNp+aSkScsCiAgICB1bml0OiAn5qyhJywKICAgIC8vIOiCqSgxMikg6IKYKDE0KSDohZUoMTYpCiAgICBwb2ludHM6IHsgYTogMTIsIGI6IDE0LCBjOiAxNiB9LAogICAgdGhyZXNob2xkRG93bjogOTUsCiAgICB0aHJlc2hvbGRVcDogMTY1LAogICAgaGludEdvb2Q6ICfkuIvljovliLDkvY3vvIHmkpHotbcnLAogICAgaGludFdhcm46ICflho3ljovkvY7kuIDngrknLAogICAgaGludFN0YXJ0OiAn5byA5aeL5LiL5Y6LJywKICAgIHBhcnRzOiAn6IKp6YOo44CB5omL6IKY44CB5omL6IWVJywKICB9LAogIGN1cmw6IHsKICAgIG5hbWU6ICfkuozlpLTlvK/kuL4nLAogICAgdW5pdDogJ+asoScsCiAgICAvLyDogqkoMTIpIOiCmCgxNCkg6IWVKDE2KQogICAgcG9pbnRzOiB7IGE6IDEyLCBiOiAxNCwgYzogMTYgfSwKICAgIHRocmVzaG9sZERvd246IDU1LCAgICAvLyDlvK/kuL7liLDkvY3op5LluqbmlLbntKcKICAgIHRocmVzaG9sZFVwOiAxNjUsCiAgICBoaW50R29vZDogJ+W8r+S4vuWIsOS9je+8geaUvuS4iycsCiAgICBoaW50V2FybjogJ+WGjeW8r+mrmOS4gOeCuScsCiAgICBoaW50U3RhcnQ6ICflvIDlp4vlvK/kuL4nLAogICAgcGFydHM6ICfogqnpg6jjgIHmiYvogpjjgIHmiYvohZUnLAogIH0sCiAgcGxhbms6IHsKICAgIG5hbWU6ICflubPmnb/mlK/mkpEnLAogICAgdW5pdDogJ+enkicsCiAgICAvLyDogqkoMTIpIOmriygyNCkg6LidKDI4KSDigJQg6Lqr5L2T55u057q/CiAgICBwb2ludHM6IHsgYTogMTIsIGI6IDI0LCBjOiAyOCB9LAogICAgdGhyZXNob2xkRG93bjogMTU1LCAgIC8vIOi6q+S9k+Wkn+ebtOWwseeul+WIsOS9jQogICAgdGhyZXNob2xkVXA6IDE1NSwKICAgIGhpbnRHb29kOiAn5L+d5oyB5L2P77yB6Lqr5L2T5b6I55u0JywKICAgIGhpbnRXYXJuOiAn5rOo5oSP5L+d5oyB6Lqr5L2T55u057q/JywKICAgIGhpbnRTdGFydDogJ+S/neaMgeW5s+adv+Wnv+WKvycsCiAgICBwYXJ0czogJ+iCqemDqOOAgemri+mDqOOAgeiEmui4nScsCiAgfSwKfTsKCi8qID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09CiAqIOW3peWFt+WHveaVsAogKiA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PSAqLwoKLyoqIOiuoeeul+S4ieeCuemXtCBCIOeCueWkhOeahOinkuW6pu+8iOW6puaVsO+8iSAqLwpmdW5jdGlvbiBjYWxjQW5nbGUoYSwgYiwgYykgewogIGNvbnN0IGFiID0geyB4OiBhLnggLSBiLngsIHk6IGEueSAtIGIueSB9OwogIGNvbnN0IGNiID0geyB4OiBjLnggLSBiLngsIHk6IGMueSAtIGIueSB9OwogIGNvbnN0IGRvdCA9IGFiLnggKiBjYi54ICsgYWIueSAqIGNiLnk7CiAgY29uc3QgbWFnQUIgPSBNYXRoLnNxcnQoYWIueCAqIGFiLnggKyBhYi55ICogYWIueSk7CiAgY29uc3QgbWFnQ0IgPSBNYXRoLnNxcnQoY2IueCAqIGNiLnggKyBjYi55ICogY2IueSk7CiAgaWYgKG1hZ0FCID09PSAwIHx8IG1hZ0NCID09PSAwKSByZXR1cm4gMDsKICBjb25zdCBjb3MgPSBNYXRoLm1heCgtMSwgTWF0aC5taW4oMSwgZG90IC8gKG1hZ0FCICogbWFnQ0IpKSk7CiAgcmV0dXJuIE1hdGguYWNvcyhjb3MpICogMTgwIC8gTWF0aC5QSTsKfQoKLyoqIOeugOefreicgum4o+WjsOaPkOekuu+8iOWIsOS9jeaXtu+8iSAqLwpsZXQgYXVkaW9DdHggPSBudWxsOwpmdW5jdGlvbiBiZWVwKGZyZXEgPSA4ODAsIGR1cmF0aW9uID0gMTIwKSB7CiAgdHJ5IHsKICAgIGlmICghYXVkaW9DdHgpIGF1ZGlvQ3R4ID0gbmV3ICh3aW5kb3cuQXVkaW9Db250ZXh0IHx8IHdpbmRvdy53ZWJraXRBdWRpb0NvbnRleHQpKCk7CiAgICBjb25zdCBvc2MgPSBhdWRpb0N0eC5jcmVhdGVPc2NpbGxhdG9yKCk7CiAgICBjb25zdCBnYWluID0gYXVkaW9DdHguY3JlYXRlR2FpbigpOwogICAgb3NjLmNvbm5lY3QoZ2Fpbik7IGdhaW4uY29ubmVjdChhdWRpb0N0eC5kZXN0aW5hdGlvbik7CiAgICBvc2MuZnJlcXVlbmN5LnZhbHVlID0gZnJlcTsKICAgIGdhaW4uZ2Fpbi5zZXRWYWx1ZUF0VGltZSgwLjI1LCBhdWRpb0N0eC5jdXJyZW50VGltZSk7CiAgICBnYWluLmdhaW4uZXhwb25lbnRpYWxSYW1wVG9WYWx1ZUF0VGltZSgwLjAwMSwgYXVkaW9DdHguY3VycmVudFRpbWUgKyBkdXJhdGlvbiAvIDEwMDApOwogICAgb3NjLnN0YXJ0KCk7CiAgICBvc2Muc3RvcChhdWRpb0N0eC5jdXJyZW50VGltZSArIGR1cmF0aW9uIC8gMTAwMCk7CiAgfSBjYXRjaCAoZSkgeyAvKiDpn7PpopHkuI3lj6/nlKjml7bpnZnpu5jlv73nlaUgKi8gfQp9CgovKiog5pu05paw5Y+N6aaI5Yy6ICovCmZ1bmN0aW9uIHNldEZlZWRiYWNrKG1zZywgaGludCwgdHlwZSkgewogIGNvbnN0IGVsID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoJ2ZlZWRiYWNrJyk7CiAgZWwuY2xhc3NOYW1lID0gJ2ZlZWRiYWNrICcgKyAodHlwZSB8fCAnaWRsZScpOwogIGVsLnF1ZXJ5U2VsZWN0b3IoJy5tc2cnKS50ZXh0Q29udGVudCA9IG1zZzsKICBlbC5xdWVyeVNlbGVjdG9yKCcuaGludCcpLnRleHRDb250ZW50ID0gaGludCB8fCAnJzsKfQoKLyoqIFRvYXN0IOaPkOekuiAqLwpsZXQgdG9hc3RUaW1lcjsKZnVuY3Rpb24gdG9hc3QobXNnKSB7CiAgY29uc3QgZWwgPSBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgndG9hc3QnKTsKICBlbC50ZXh0Q29udGVudCA9IG1zZzsKICBlbC5jbGFzc0xpc3QuYWRkKCdzaG93Jyk7CiAgY2xlYXJUaW1lb3V0KHRvYXN0VGltZXIpOwogIHRvYXN0VGltZXIgPSBzZXRUaW1lb3V0KCgpID0+IGVsLmNsYXNzTGlzdC5yZW1vdmUoJ3Nob3cnKSwgMjAwMCk7Cn0KCi8qKiDov5Tlm57kuLvpobUgKi8KZnVuY3Rpb24gZ29CYWNrKCkgewogIHN0b3BEZXRlY3Rpb24oKTsKICBoaXN0b3J5LmJhY2soKTsKfQoKLyogPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0KICog5Yqo5L2c6YCJ5oupCiAqID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09ICovCmZ1bmN0aW9uIHNlbGVjdEFjdGlvbihhY3Rpb24pIHsKICBpZiAoaXNSdW5uaW5nKSByZXR1cm47IC8vIOajgOa1i+S4reS4jeWFgeiuuOWIh+aNogogIGN1cnJlbnRBY3Rpb24gPSBhY3Rpb247CiAgZG9jdW1lbnQucXVlcnlTZWxlY3RvckFsbCgnLmFjdGlvbi1idG4nKS5mb3JFYWNoKGJ0biA9PiB7CiAgICBidG4uY2xhc3NMaXN0LnRvZ2dsZSgnYWN0aXZlJywgYnRuLmRhdGFzZXQuYWN0aW9uID09PSBhY3Rpb24pOwogIH0pOwogIC8vIOmHjee9ruiuoeaVsOOAgeeKtuaAgeWSjOmYsuaKluWPmOmHjwogIGNvdW50ID0gMDsKICBwb3NlU3RhdGUgPSAnaWRsZSc7CiAgc3RhdGVDb25maXJtRnJhbWVzID0gMDsKICBwZW5kaW5nU3RhdGUgPSBudWxsOwogIGxhc3RDb3VudFRpbWUgPSAwOwogIHVwZGF0ZUNvdW50ZXIoKTsKICBjb25zdCBjZmcgPSBBQ1RJT05TW2FjdGlvbl07CiAgc2V0RmVlZGJhY2soJ+WHhuWkh+Wwsee7qicsIGDlvZPliY3liqjkvZzvvJoke2NmZy5uYW1lfe+8jOeCueWHuyLlvIDlp4vmo4DmtYsiYCwgJ2lkbGUnKTsKfQoKLyoqIOabtOaWsOiuoeaVsOaYvuekuiAqLwpmdW5jdGlvbiB1cGRhdGVDb3VudGVyKCkgewogIGNvbnN0IGNmZyA9IEFDVElPTlNbY3VycmVudEFjdGlvbl07CiAgZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoJ2NvdW50TnVtJykudGV4dENvbnRlbnQgPSBjb3VudDsKICBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgnY291bnRVbml0JykudGV4dENvbnRlbnQgPSBjZmcudW5pdDsKfQoKLyogPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0KICogTWVkaWFQaXBlIFBvc2Ug5Yid5aeL5YyWCiAqID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09ICovCmFzeW5jIGZ1bmN0aW9uIGluaXRQb3NlKCkgewogIC8vIOajgOafpSBNZWRpYVBpcGUg5piv5ZCm5Yqg6L295oiQ5YqfCiAgaWYgKHR5cGVvZiBQb3NlID09PSAndW5kZWZpbmVkJykgewogICAgdGhyb3cgbmV3IEVycm9yKCfmo4DmtYvmqKHlnovliqDovb3lpLHotKXvvIzor7fmo4Dmn6XnvZHnu5zov57mjqUnKTsKICB9CgogIHBvc2UgPSBuZXcgUG9zZSh7CiAgICBsb2NhdGVGaWxlOiAoZmlsZSkgPT4KICAgICAgYGh0dHBzOi8vY2RuLmpzZGVsaXZyLm5ldC9ucG0vQG1lZGlhcGlwZS9wb3NlLyR7ZmlsZX1gLAogIH0pOwoKICBwb3NlLnNldE9wdGlvbnMoewogICAgbW9kZWxDb21wbGV4aXR5OiAxLCAgICAgICAvLyAxPeWFqOeyvuW6pu+8jDA96L276YePCiAgICBzbW9vdGhMYW5kbWFya3M6IHRydWUsICAgIC8vIOW5s+a7keWFs+mUrueCue+8jOWHj+WwkeaKluWKqAogICAgZW5hYmxlU2VnbWVudGF0aW9uOiBmYWxzZSwKICAgIG1pbkRldGVjdGlvbkNvbmZpZGVuY2U6IDAuMiwgIC8vIOi/m+S4gOatpemZjeS9ju+8jOmDqOWIhui6q+S9k+WFpemVnOS5n+iDveajgOa1iwogICAgbWluVHJhY2tpbmdDb25maWRlbmNlOiAwLjIsICAgLy8g6L+b5LiA5q2l6ZmN5L2O77yM6Lef6Liq5pu054G15pWPCiAgfSk7CgogIHBvc2Uub25SZXN1bHRzKG9uUG9zZVJlc3VsdHMpOwp9CgovKiA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQogKiDmo4DmtYvnu5PmnpzlpITnkIbvvJrnu5jliLbpqqjmnrYgKyDliqjkvZzliKTmlq0KICogPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0gKi8KZnVuY3Rpb24gb25Qb3NlUmVzdWx0cyhyZXN1bHRzKSB7CiAgY29uc3QgY2FudmFzID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoJ2NhbnZhcycpOwogIGNvbnN0IGN0eCA9IGNhbnZhcy5nZXRDb250ZXh0KCcyZCcpOwoKICAvLyDlkIzmraUgY2FudmFzIOWwuuWvuOWIsOinhumikQogIGNvbnN0IHZpZGVvID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoJ3ZpZGVvJyk7CiAgY2FudmFzLndpZHRoID0gdmlkZW8udmlkZW9XaWR0aCB8fCA2NDA7CiAgY2FudmFzLmhlaWdodCA9IHZpZGVvLnZpZGVvSGVpZ2h0IHx8IDQ4MDsKCiAgY3R4LnNhdmUoKTsKICBjdHguY2xlYXJSZWN0KDAsIDAsIGNhbnZhcy53aWR0aCwgY2FudmFzLmhlaWdodCk7CgogIC8vIOe7mOWItuaRhOWDj+WktOeUu+mdogogIGN0eC5kcmF3SW1hZ2UocmVzdWx0cy5pbWFnZSwgMCwgMCwgY2FudmFzLndpZHRoLCBjYW52YXMuaGVpZ2h0KTsKCiAgaWYgKHJlc3VsdHMucG9zZUxhbmRtYXJrcykgewogICAgbGFzdExhbmRtYXJrcyA9IHJlc3VsdHMucG9zZUxhbmRtYXJrczsKCiAgICAvLyDnu5jliLbpqqjmnrbov57nur8KICAgIGRyYXdDb25uZWN0b3JzKGN0eCwgcmVzdWx0cy5wb3NlTGFuZG1hcmtzLCBQT1NFX0NPTk5FQ1RJT05TLAogICAgICB7IGNvbG9yOiAnIzAwRkYwMCcsIGxpbmVXaWR0aDogMyB9KTsKICAgIC8vIOe7mOWItuWFs+mUrueCuQogICAgZHJhd0xhbmRtYXJrcyhjdHgsIHJlc3VsdHMucG9zZUxhbmRtYXJrcywKICAgICAgeyBjb2xvcjogJyNGRjAwMDAnLCBsaW5lV2lkdGg6IDEsIHJhZGl1czogMyB9KTsKCiAgICAvLyDliqjkvZzliKTmlq0KICAgIGNoZWNrQWN0aW9uKHJlc3VsdHMucG9zZUxhbmRtYXJrcyk7CiAgfSBlbHNlIHsKICAgIC8vIOacquajgOa1i+WIsOS6uuS9kwogICAgc2V0RmVlZGJhY2soJ+acquajgOa1i+WIsOi6q+S9kycsICfor7fnoa7kv50nICsgQUNUSU9OU1tjdXJyZW50QWN0aW9uXS5wYXJ0cyArICflnKjnlLvpnaLlhoUnLCAnYmFkJyk7CiAgICBsYXN0TGFuZG1hcmtzID0gbnVsbDsKICB9CgogIGN0eC5yZXN0b3JlKCk7Cn0KCi8qID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09CiAqIOWKqOS9nOWIpOaWreaguOW/g+mAu+i+kQogKgogKiDnlKjnirbmgIHmnLrmo4DmtYvliqjkvZznmoQi5LiL4oaS5LiKIuWRqOacn++8jOWujOaIkOS4gOS4quWRqOacn+iuoeaVsCsx44CCCiAqIOW5s+adv+aUr+aSkeeJueauiuWkhOeQhu+8muS/neaMgeWnv+WKv+iuoeaXtuOAggogKiA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PSAqLwpmdW5jdGlvbiBjaGVja0FjdGlvbihsYW5kbWFya3MpIHsKICBjb25zdCBjZmcgPSBBQ1RJT05TW2N1cnJlbnRBY3Rpb25dOwogIGNvbnN0IGEgPSBsYW5kbWFya3NbY2ZnLnBvaW50cy5hXTsKICBjb25zdCBiID0gbGFuZG1hcmtzW2NmZy5wb2ludHMuYl07CiAgY29uc3QgYyA9IGxhbmRtYXJrc1tjZmcucG9pbnRzLmNdOwoKICAvLyDlhbPplK7ngrnnvLrlpLHvvIjooqvpga7mjKHmiJbotoXlh7rnlLvpnaLvvIkKICBpZiAoIWEgfHwgIWIgfHwgIWMgfHwgYS52aXNpYmlsaXR5IDwgMC4wNSB8fCBiLnZpc2liaWxpdHkgPCAwLjA1IHx8IGMudmlzaWJpbGl0eSA8IDAuMDUpIHsKICAgIHNldEZlZWRiYWNrKCflhbPplK7ngrnkuI3lj6/op4EnLCAn6K+356Gu5L+dJyArIGNmZy5wYXJ0cyArICflnKjnlLvpnaLlhoUnLCAnd2FybicpOwogICAgcmV0dXJuOwogIH0KCiAgY29uc3QgYW5nID0gY2FsY0FuZ2xlKGEsIGIsIGMpOwoKICAvLyDoioLmtYHvvJrlj43ppojkuI3opoHmr4/luKfpg73mm7TmlrDvvIjpgb/lhY3pl6rng4HvvIkKICBjb25zdCBub3cgPSBEYXRlLm5vdygpOwogIGNvbnN0IGNhbkZlZWRiYWNrID0gbm93IC0gbGFzdEZlZWRiYWNrVGltZSA+IDE1MDsKCiAgaWYgKGN1cnJlbnRBY3Rpb24gPT09ICdwbGFuaycpIHsKICAgIC8vID09PT09IOW5s+adv+aUr+aSke+8muiuoeaXtuaooeW8jyA9PT09PQogICAgaWYgKGFuZyA+PSBjZmcudGhyZXNob2xkRG93bikgewogICAgICAvLyDouqvkvZPlpJ/nm7QKICAgICAgaWYgKHBvc2VTdGF0ZSA9PT0gJ2lkbGUnKSB7CiAgICAgICAgcG9zZVN0YXRlID0gJ2hvbGRpbmcnOwogICAgICAgIHBsYW5rU3RhcnRUaW1lID0gbm93OwogICAgICB9CiAgICAgIGNvbnN0IGVsYXBzZWQgPSBNYXRoLmZsb29yKChub3cgLSBwbGFua1N0YXJ0VGltZSkgLyAxMDAwKTsKICAgICAgY291bnQgPSBlbGFwc2VkOwogICAgICB1cGRhdGVDb3VudGVyKCk7CiAgICAgIGlmIChjYW5GZWVkYmFjaykgewogICAgICAgIHNldEZlZWRiYWNrKGDlnZrmjIHkvY/vvIEke2VsYXBzZWR956eSYCwgJ+S/neaMgei6q+S9k+S4gOadoeebtOe6vycsICdnb29kJyk7CiAgICAgICAgbGFzdEZlZWRiYWNrVGltZSA9IG5vdzsKICAgICAgfQogICAgfSBlbHNlIHsKICAgICAgLy8g6Lqr5L2T5LiN5aSf55u0CiAgICAgIGlmIChjYW5GZWVkYmFjaykgewogICAgICAgIHNldEZlZWRiYWNrKGNmZy5oaW50V2FybiwgYOW9k+WJjeinkuW6piAke01hdGgucm91bmQoYW5nKX3CsO+8jOmcgCA+ICR7Y2ZnLnRocmVzaG9sZERvd259wrBgLCAnd2FybicpOwogICAgICAgIGxhc3RGZWVkYmFja1RpbWUgPSBub3c7CiAgICAgIH0KICAgIH0KICB9IGVsc2UgewogICAgLy8gPT09PT0g5rex6LmyL+S/r+WNp+aSkS/lvK/kuL7vvJrorqHmlbDmqKHlvI/vvIjluKfnoa7orqTpmLLmipYr6K6h5pWw5Ya35Y2077yJID09PT09CiAgICBpZiAocG9zZVN0YXRlID09PSAnaWRsZScgfHwgcG9zZVN0YXRlID09PSAndXAnKSB7CiAgICAgIC8vIOermeeriy/mkpHotbfnirbmgIHvvIznrYnlvoXkuIvoubIv5LiL5Y6LL+W8r+S4vgogICAgICBpZiAoYW5nIDwgY2ZnLnRocmVzaG9sZERvd24pIHsKICAgICAgICAvLyDop5Lluqbmu6HotrPliLDkvY3mnaHku7bvvIzpnIDov57nu61O5bin56Gu6K6k77yI6Ziy5Y2V5bin5oqW5Yqo6K+v6Kem5Y+R77yJCiAgICAgICAgaWYgKHBlbmRpbmdTdGF0ZSA9PT0gJ2Rvd24nKSB7CiAgICAgICAgICBzdGF0ZUNvbmZpcm1GcmFtZXMrKzsKICAgICAgICB9IGVsc2UgewogICAgICAgICAgcGVuZGluZ1N0YXRlID0gJ2Rvd24nOwogICAgICAgICAgc3RhdGVDb25maXJtRnJhbWVzID0gMTsKICAgICAgICB9CiAgICAgICAgaWYgKHN0YXRlQ29uZmlybUZyYW1lcyA+PSBDT05GSVJNX0ZSQU1FUykgewogICAgICAgICAgLy8g6L+e57utTuW4p+ehruiupOWIsOS9jQogICAgICAgICAgcG9zZVN0YXRlID0gJ2Rvd24nOwogICAgICAgICAgcGVuZGluZ1N0YXRlID0gbnVsbDsKICAgICAgICAgIHN0YXRlQ29uZmlybUZyYW1lcyA9IDA7CiAgICAgICAgICBpZiAoY2FuRmVlZGJhY2spIHsKICAgICAgICAgICAgc2V0RmVlZGJhY2soY2ZnLmhpbnRHb29kLCBg6KeS5bqmICR7TWF0aC5yb3VuZChhbmcpfcKwYCwgJ2dvb2QnKTsKICAgICAgICAgICAgbGFzdEZlZWRiYWNrVGltZSA9IG5vdzsKICAgICAgICAgIH0KICAgICAgICAgIGJlZXAoODgwLCAxMDApOwogICAgICAgIH0KICAgICAgfSBlbHNlIHsKICAgICAgICAvLyDkuI3mu6HotrPliLDkvY3mnaHku7bvvIzph43nva7luKfnoa7orqQKICAgICAgICBwZW5kaW5nU3RhdGUgPSBudWxsOwogICAgICAgIHN0YXRlQ29uZmlybUZyYW1lcyA9IDA7CiAgICAgICAgaWYgKGFuZyA8IGNmZy50aHJlc2hvbGRVcCAtIDE1ICYmIGNhbkZlZWRiYWNrKSB7CiAgICAgICAgICBzZXRGZWVkYmFjayhjZmcuaGludFdhcm4sIGDop5LluqYgJHtNYXRoLnJvdW5kKGFuZyl9wrDvvIzpnIAgPCAke2NmZy50aHJlc2hvbGREb3dufcKwYCwgJ3dhcm4nKTsKICAgICAgICAgIGxhc3RGZWVkYmFja1RpbWUgPSBub3c7CiAgICAgICAgfQogICAgICB9CiAgICB9IGVsc2UgaWYgKHBvc2VTdGF0ZSA9PT0gJ2Rvd24nKSB7CiAgICAgIC8vIOW3suWIsOS9je+8jOetieW+heaBouWkjQogICAgICBpZiAoYW5nID4gY2ZnLnRocmVzaG9sZFVwKSB7CiAgICAgICAgLy8g6KeS5bqm5ruh6Laz5oGi5aSN5p2h5Lu277yM6ZyA6L+e57utTuW4p+ehruiupCArIOWGt+WNtOacn+W3sui/hwogICAgICAgIGlmIChwZW5kaW5nU3RhdGUgPT09ICd1cCcpIHsKICAgICAgICAgIHN0YXRlQ29uZmlybUZyYW1lcysrOwogICAgICAgIH0gZWxzZSB7CiAgICAgICAgICBwZW5kaW5nU3RhdGUgPSAndXAnOwogICAgICAgICAgc3RhdGVDb25maXJtRnJhbWVzID0gMTsKICAgICAgICB9CiAgICAgICAgaWYgKHN0YXRlQ29uZmlybUZyYW1lcyA+PSBDT05GSVJNX0ZSQU1FUyAmJiBub3cgLSBsYXN0Q291bnRUaW1lID4gQ09VTlRfQ09PTERPV04pIHsKICAgICAgICAgIC8vIOehruiupOaBouWkjSArIOWGt+WNtOacn+W3sui/h++8jOato+W8j+iuoeaVsAogICAgICAgICAgcG9zZVN0YXRlID0gJ3VwJzsKICAgICAgICAgIHBlbmRpbmdTdGF0ZSA9IG51bGw7CiAgICAgICAgICBzdGF0ZUNvbmZpcm1GcmFtZXMgPSAwOwogICAgICAgICAgY291bnQrKzsKICAgICAgICAgIGxhc3RDb3VudFRpbWUgPSBub3c7CiAgICAgICAgICB1cGRhdGVDb3VudGVyKCk7CiAgICAgICAgICBpZiAoY2FuRmVlZGJhY2spIHsKICAgICAgICAgICAgc2V0RmVlZGJhY2soYOWujOaIkCAke2NvdW50fSDmrKHvvIFgLCBjZmcuaGludFN0YXJ0LCAnZ29vZCcpOwogICAgICAgICAgICBsYXN0RmVlZGJhY2tUaW1lID0gbm93OwogICAgICAgICAgfQogICAgICAgICAgYmVlcCg2NjAsIDgwKTsKICAgICAgICB9CiAgICAgIH0gZWxzZSB7CiAgICAgICAgLy8g5LiN5ruh6Laz5oGi5aSN5p2h5Lu277yM6YeN572u5bin56Gu6K6kCiAgICAgICAgcGVuZGluZ1N0YXRlID0gbnVsbDsKICAgICAgICBzdGF0ZUNvbmZpcm1GcmFtZXMgPSAwOwogICAgICB9CiAgICB9CiAgfQp9CgovKiA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQogKiDmkYTlg4/lpLTmjqfliLYKICogPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0gKi8KYXN5bmMgZnVuY3Rpb24gc3RhcnREZXRlY3Rpb24oKSB7CiAgaWYgKGlzUnVubmluZykgcmV0dXJuOwoKICB0cnkgewogICAgLy8g5pi+56S65Yqg6L295o+Q56S6CiAgICBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgnbG9hZGluZycpLmNsYXNzTGlzdC5hZGQoJ3Nob3cnKTsKICAgIGRvY3VtZW50LmdldEVsZW1lbnRCeUlkKCdsb2FkaW5nVGV4dCcpLnRleHRDb250ZW50ID0gJ+ato+WcqOWKoOi9veajgOa1i+aooeWeiy4uLic7CgogICAgLy8g6aaW5qyh5Yid5aeL5YyWIFBvc2Ug5qih5Z6LCiAgICBpZiAoIXBvc2UpIHsKICAgICAgYXdhaXQgaW5pdFBvc2UoKTsKICAgIH0KICAgIGRvY3VtZW50LmdldEVsZW1lbnRCeUlkKCdsb2FkaW5nVGV4dCcpLnRleHRDb250ZW50ID0gJ+ato+WcqOWQr+WKqOaRhOWDj+WktC4uLic7CgogICAgLy8g5ZCv5Yqo5pGE5YOP5aS0CiAgICBjb25zdCB2aWRlbyA9IGRvY3VtZW50LmdldEVsZW1lbnRCeUlkKCd2aWRlbycpOwogICAgY29uc3Qgc3RyZWFtID0gYXdhaXQgbmF2aWdhdG9yLm1lZGlhRGV2aWNlcy5nZXRVc2VyTWVkaWEoewogICAgICB2aWRlbzogeyB3aWR0aDogNjQwLCBoZWlnaHQ6IDQ4MCwgZmFjaW5nTW9kZTogJ3VzZXInIH0sCiAgICAgIGF1ZGlvOiBmYWxzZSwKICAgIH0pOwogICAgdmlkZW8uc3JjT2JqZWN0ID0gc3RyZWFtOwogICAgYXdhaXQgdmlkZW8ucGxheSgpOwoKICAgIC8vIOmakOiXj+WNoOS9jeespgogICAgZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoJ3BsYWNlaG9sZGVyJykuc3R5bGUuZGlzcGxheSA9ICdub25lJzsKCiAgICAvLyDnlKggTWVkaWFQaXBlIENhbWVyYSDlt6XlhbfpqbHliqjmo4DmtYvlvqrnjq8KICAgIGlmICh0eXBlb2YgQ2FtZXJhICE9PSAndW5kZWZpbmVkJykgewogICAgICBjYW1lcmEgPSBuZXcgQ2FtZXJhKHZpZGVvLCB7CiAgICAgICAgb25GcmFtZTogYXN5bmMgKCkgPT4gewogICAgICAgICAgaWYgKGlzUnVubmluZyAmJiBwb3NlKSB7CiAgICAgICAgICAgIGF3YWl0IHBvc2Uuc2VuZCh7IGltYWdlOiB2aWRlbyB9KTsKICAgICAgICAgIH0KICAgICAgICB9LAogICAgICAgIHdpZHRoOiA2NDAsCiAgICAgICAgaGVpZ2h0OiA0ODAsCiAgICAgIH0pOwogICAgICBjYW1lcmEuc3RhcnQoKTsKICAgIH0gZWxzZSB7CiAgICAgIC8vIENhbWVyYSDlt6XlhbfmnKrliqDovb3ml7bvvIznlKjmiYvliqggcmVxdWVzdEFuaW1hdGlvbkZyYW1lIOW+queOrwogICAgICBtYW51YWxMb29wKCk7CiAgICB9CgogICAgaXNSdW5uaW5nID0gdHJ1ZTsKICAgIGRvY3VtZW50LmdldEVsZW1lbnRCeUlkKCdsb2FkaW5nJykuY2xhc3NMaXN0LnJlbW92ZSgnc2hvdycpOwogICAgZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoJ2J0blN0YXJ0JykuZGlzYWJsZWQgPSB0cnVlOwogICAgZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoJ2J0blN0b3AnKS5kaXNhYmxlZCA9IGZhbHNlOwogICAgZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoJ2J0blNhdmUnKS5kaXNhYmxlZCA9IGZhbHNlOwoKICAgIGNvbnN0IGNmZyA9IEFDVElPTlNbY3VycmVudEFjdGlvbl07CiAgICBzZXRGZWVkYmFjayhg5byA5aeLJHtjZmcubmFtZX3mo4DmtYtgLCBjZmcuaGludFN0YXJ0LCAnaWRsZScpOwogIH0gY2F0Y2ggKGUpIHsKICAgIGRvY3VtZW50LmdldEVsZW1lbnRCeUlkKCdsb2FkaW5nJykuY2xhc3NMaXN0LnJlbW92ZSgnc2hvdycpOwogICAgY29uc29sZS5lcnJvcign5ZCv5Yqo5aSx6LSlOicsIGUpOwogICAgaWYgKGUubmFtZSA9PT0gJ05vdEFsbG93ZWRFcnJvcicpIHsKICAgICAgdG9hc3QoJ+aRhOWDj+WktOadg+mZkOiiq+aLkue7ne+8jOivt+WFgeiuuOWQjumHjeivlScpOwogICAgfSBlbHNlIGlmIChlLm1lc3NhZ2UgJiYgZS5tZXNzYWdlLmluY2x1ZGVzKCfmqKHlnosnKSkgewogICAgICB0b2FzdCgn5qOA5rWL5qih5Z6L5Yqg6L295aSx6LSl77yM6K+35qOA5p+l572R57ucJyk7CiAgICB9IGVsc2UgewogICAgICB0b2FzdCgn5ZCv5Yqo5aSx6LSl77yaJyArIChlLm1lc3NhZ2UgfHwgJ+acquefpemUmeivrycpKTsKICAgIH0KICB9Cn0KCi8qKiDmiYvliqjmo4DmtYvlvqrnjq/vvIhDYW1lcmEg5bel5YW35LiN5Y+v55So5pe255qE5ZCO5aSH5pa55qGI77yJICovCmFzeW5jIGZ1bmN0aW9uIG1hbnVhbExvb3AoKSB7CiAgY29uc3QgdmlkZW8gPSBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgndmlkZW8nKTsKICB3aGlsZSAoaXNSdW5uaW5nICYmIHBvc2UpIHsKICAgIHRyeSB7CiAgICAgIGF3YWl0IHBvc2Uuc2VuZCh7IGltYWdlOiB2aWRlbyB9KTsKICAgIH0gY2F0Y2ggKGUpIHsgLyog5YG25Y+R6ZSZ6K+v5b+955Wl77yM57un57ut5b6q546vICovIH0KICAgIGF3YWl0IG5ldyBQcm9taXNlKHIgPT4gcmVxdWVzdEFuaW1hdGlvbkZyYW1lKHIpKTsKICB9Cn0KCi8qKiDlgZzmraLmo4DmtYsgKi8KZnVuY3Rpb24gc3RvcERldGVjdGlvbigpIHsKICBpc1J1bm5pbmcgPSBmYWxzZTsKCiAgLy8g5YGc5q2i5pGE5YOP5aS0CiAgY29uc3QgdmlkZW8gPSBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgndmlkZW8nKTsKICBpZiAodmlkZW8uc3JjT2JqZWN0KSB7CiAgICB2aWRlby5zcmNPYmplY3QuZ2V0VHJhY2tzKCkuZm9yRWFjaCh0ID0+IHQuc3RvcCgpKTsKICAgIHZpZGVvLnNyY09iamVjdCA9IG51bGw7CiAgfQoKICAvLyDlgZzmraIgQ2FtZXJhCiAgaWYgKGNhbWVyYSkgewogICAgdHJ5IHsgY2FtZXJhLnN0b3AoKTsgfSBjYXRjaCAoZSkge30KICAgIGNhbWVyYSA9IG51bGw7CiAgfQoKICAvLyDmuIXnqbogY2FudmFzCiAgY29uc3QgY2FudmFzID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoJ2NhbnZhcycpOwogIGNvbnN0IGN0eCA9IGNhbnZhcy5nZXRDb250ZXh0KCcyZCcpOwogIGN0eC5jbGVhclJlY3QoMCwgMCwgY2FudmFzLndpZHRoLCBjYW52YXMuaGVpZ2h0KTsKCiAgLy8g5oGi5aSNIFVJCiAgZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoJ3BsYWNlaG9sZGVyJykuc3R5bGUuZGlzcGxheSA9ICcnOwogIGRvY3VtZW50LmdldEVsZW1lbnRCeUlkKCdidG5TdGFydCcpLmRpc2FibGVkID0gZmFsc2U7CiAgZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoJ2J0blN0b3AnKS5kaXNhYmxlZCA9IHRydWU7CgogIGlmIChjb3VudCA+IDApIHsKICAgIHNldEZlZWRiYWNrKGDmnKzmrKHlrozmiJAgJHtjb3VudH0gJHtBQ1RJT05TW2N1cnJlbnRBY3Rpb25dLnVuaXR9YCwgJ+WPr+S/neWtmOWIsOi/kOWKqOiusOW9leaIlue7p+e7rScsICdnb29kJyk7CiAgfSBlbHNlIHsKICAgIHNldEZlZWRiYWNrKCflt7LlgZzmraInLCAn54K55Ye7IuW8gOWni+ajgOa1iyLph43mlrDlvIDlp4snLCAnaWRsZScpOwogIH0KfQoKLyogPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0KICog5L+d5a2Y5Yiw6L+Q5Yqo6K6w5b2V77yI5YaZ5YWlIGxvY2FsU3RvcmFnZe+8jOS4jiBpbmRleC5odG1sIOWFseS6q++8iQogKiA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PSAqLwpmdW5jdGlvbiBzYXZlUmVjb3JkKCkgewogIGlmIChjb3VudCA8PSAwKSB7CiAgICB0b2FzdCgn5rKh5pyJ5Y+v5L+d5a2Y55qE6K6w5b2VJyk7CiAgICByZXR1cm47CiAgfQoKICBjb25zdCBjZmcgPSBBQ1RJT05TW2N1cnJlbnRBY3Rpb25dOwogIGNvbnN0IG5vdyA9IG5ldyBEYXRlKCk7CgogIC8vIOS8sOeul+a2iOiAl++8iOeyl+eVpe+8muavj+WKqOS9nOaMieexu+Wei+e7meS4gOS4quW5s+Wdh+WAvO+8iQogIGNvbnN0IENBTF9QRVJfVU5JVCA9IHsgc3F1YXQ6IDgsIHB1c2h1cDogNSwgY3VybDogNCwgcGxhbms6IDUgfTsKICBjb25zdCBjYWwgPSBNYXRoLnJvdW5kKGNvdW50ICogKENBTF9QRVJfVU5JVFtjdXJyZW50QWN0aW9uXSB8fCA1KSk7CgogIC8vIOaXtumVv++8iOWIhumSn++8iQogIGxldCBkdXI7CiAgaWYgKGN1cnJlbnRBY3Rpb24gPT09ICdwbGFuaycpIHsKICAgIGR1ciA9IE1hdGgubWF4KDEsIE1hdGgucm91bmQoY291bnQgLyA2MCkpOwogIH0gZWxzZSB7CiAgICBkdXIgPSBNYXRoLm1heCgxLCBNYXRoLnJvdW5kKGNvdW50ICogMS41KSk7IC8vIOeyl+eVpeavj+asoTEuNeWIhumSnwogIH0KCiAgLy8g6K+75Y+W546w5pyJ6L+Q5Yqo6K6w5b2V77yM6L+95Yqg5paw6K6w5b2VCiAgY29uc3Qga2V5ID0gJ2ZpdG5lc3NfZXhlcmNpc2UnOwogIGxldCBsaXN0OwogIHRyeSB7CiAgICBsaXN0ID0gSlNPTi5wYXJzZShsb2NhbFN0b3JhZ2UuZ2V0SXRlbShrZXkpIHx8ICdbXScpOwogIH0gY2F0Y2ggKGUpIHsKICAgIGxpc3QgPSBbXTsKICB9CiAgY29uc3QgaWQgPSBsaXN0Lmxlbmd0aCA/IE1hdGgubWF4KC4uLmxpc3QubWFwKHIgPT4gci5pZCkpICsgMSA6IDE7CiAgbGlzdC5wdXNoKHsKICAgIGlkLAogICAgdHlwZTogY2ZnLm5hbWUsCiAgICBkdXIsCiAgICBjYWwsCiAgICB0czogbm93LmdldFRpbWUoKSwKICB9KTsKICBsb2NhbFN0b3JhZ2Uuc2V0SXRlbShrZXksIEpTT04uc3RyaW5naWZ5KGxpc3QpKTsKCiAgdG9hc3QoYOW3suS/neWtmO+8miR7Y2ZnLm5hbWV9ICR7Y291bnR9JHtjZmcudW5pdH3vvIzmtojogJcgJHtjYWx9IOWNg+WNoWApOwoKICAvLyDnpoHnlKjkv53lrZjmjInpkq7vvIzpmLLmraLph43lpI3kv53lrZgKICBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgnYnRuU2F2ZScpLmRpc2FibGVkID0gdHJ1ZTsKfQoKLyogPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0KICog6aG16Z2i5Y246L295pe25riF55CG5pGE5YOP5aS0CiAqID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09ICovCndpbmRvdy5hZGRFdmVudExpc3RlbmVyKCdiZWZvcmV1bmxvYWQnLCAoKSA9PiB7CiAgc3RvcERldGVjdGlvbigpOwp9KTsKCi8qID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09CiAqIOWQr+WKqO+8muajgOafpSBNZWRpYVBpcGUg5piv5ZCm5Yqg6L295oiQ5YqfCiAqID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09ICovCndpbmRvdy5hZGRFdmVudExpc3RlbmVyKCdsb2FkJywgKCkgPT4gewogIC8vIOW7tui/n+ajgOafpe+8jOetiSBDRE4g6ISa5pys5Yqg6L295a6MCiAgc2V0VGltZW91dCgoKSA9PiB7CiAgICBpZiAodHlwZW9mIFBvc2UgPT09ICd1bmRlZmluZWQnKSB7CiAgICAgIHNldEZlZWRiYWNrKCfmqKHlnovliqDovb3lpLHotKUnLCAn6K+35qOA5p+l572R57uc5ZCO5Yi35paw6aG16Z2iJywgJ2JhZCcpOwogICAgICBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgnYnRuU3RhcnQnKS5kaXNhYmxlZCA9IHRydWU7CiAgICB9CiAgfSwgMzAwMCk7Cn0pOwo8L3NjcmlwdD4KPC9ib2R5Pgo8L2h0bWw+";
+
+function openPose() {
+    try {
+        var b64 = POSE_HTML_B64;
+        // base64 解码为二进制字符串
+        var binary = atob(b64);
+        var len = binary.length;
+        var bytes = new Uint8Array(len);
+        for (var i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+        // 创建 Blob 并导航
+        var blob = new Blob([bytes], {type: 'text/html;charset=utf-8'});
+        var url = URL.createObjectURL(blob);
+        location.href = url;
+    } catch (e) {
+        alert('无法打开动作检测页面: ' + e.message);
+    }
+}
+</script>
+</body>
+</html>
